@@ -47,9 +47,16 @@
     document.getElementById('paymentMethod').closest('div').classList.toggle('hidden', isAuditor);
     document.getElementById('amountPaid').closest('div').parentElement.classList.toggle('hidden', isAuditor);
     document.getElementById('transactionNote').closest('div').classList.toggle('hidden', isAuditor);
-    document.getElementById('productGrid').classList.toggle('pointer-events-none', isAuditor);
+    //document.getElementById('productGrid').classList.toggle('pointer-events-none', isAuditor);
   }
 
+  // Add styling to disable only the cards:
+  if (isAuditor) {
+    document.getElementById('productGrid').classList.add('auditor-mode');
+  } else {
+    document.getElementById('productGrid').classList.remove('auditor-mode');
+  }
+  
   // Work entirely in sen. JavaScript decimal arithmetic made RM 1.20 appear
   // less than an internally represented RM 1.2000000000000002.
   window.getCartTotal = function () {
