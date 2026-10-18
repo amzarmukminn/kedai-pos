@@ -147,6 +147,43 @@
     appState.storeState = settings.data.state;
   }
 
+  // History is queried independently of the 500-sale operational cache. Do not
+  // replace appState.transactions: the POS uses it for its own recent activity.
+  const renderCachedHistory = window.renderHistory;
+  let historyRequest = 0;
+  window.renderHistory = async function () {
+    const request = ++historyRequest;
+    const list = document.getElementById('historyList');
+    const filter = document.getElementById('historyFilter').value;
+    const selected = document.getElementById('historyDate').value;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    let start = null, end = null;
+    if (filter === 'date') { start = selected; end = selected; }
+    if (filter === 'today') { start = today; end = today; }
+    if (filter === 'month') { start = today.slice(0, 8) + '01'; end = today; }
+    if (filter === 'week') { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); start = d.toISOString().slice(0, 10); end = today; }
+    list.textContent = 'Memuatkan sejarah transaksi…';
+    try {
+      const rows = [];
+      if (filter !== 'date' || selected) {
+        for (let offset = 0;; offset += 500) {
+          let query = client.from('sales').select('id,receipt_number,completed_at,total,payments(method,amount,cash_received,change_given,status),sale_items(product_id,product_name_snapshot,unit_price,quantity,line_total)').eq('status', 'completed').order('completed_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 499);
+          if (start) query = query.gte('completed_at', start + 'T00:00:00+08:00').lt('completed_at', new Date(Date.parse(end + 'T00:00:00+08:00') + 86400000).toISOString());
+          const { data, error } = await query;
+          if (error) throw error;
+          rows.push(...data);
+          if (data.length < 500) break;
+        }
+      }
+      if (request !== historyRequest) return;
+      const previous = appState.transactions;
+      appState.transactions = rows.map(s => ({ id: s.id, receiptNumber: s.receipt_number, timestamp: s.completed_at, total: money(s.total), paid: money(s.payments?.[0]?.cash_received ?? s.payments?.[0]?.amount), balance: money(s.payments?.[0]?.change_given), paymentMethod: s.payments?.[0]?.method, items: (s.sale_items || []).map(i => ({ productId: i.product_id, name: i.product_name_snapshot, price: money(i.unit_price), quantity: i.quantity, total: money(i.line_total) })) }));
+      try { renderCachedHistory(); } finally { appState.transactions = previous; }
+    } catch (error) {
+      if (request === historyRequest) { list.textContent = 'Sejarah gagal dimuatkan: ' + (error.message || error); document.getElementById('historyTotalCount').textContent = '—'; document.getElementById('historyTotalSales').textContent = '—'; }
+    }
+  };
+
   async function renderRemoteData() {
     await loadRemoteData();
     populateSupplierDropdowns(); renderCategories(); renderProducts(); renderCart();
@@ -363,3 +400,5 @@
     reader.readAsText(file);
   };
 })();
+
+
