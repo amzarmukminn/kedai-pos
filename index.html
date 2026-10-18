@@ -1103,8 +1103,8 @@
                         <option value="all">Semua</option>
                         <option value="today">Hari Ini</option>
                         <option value="week">Minggu Ini</option>
-                        <option value="month">Bulan Ini</option><option value="date">Tarikh Pilihan</option><option value="date">Tarikh Pilihan</option>
-                    </select><input id="historyDate" type="date" onchange="renderHistory()" class="px-2 py-1 border border-gray-300 rounded text-sm">
+                        <option value="month">Bulan Ini</option><option value="date">Tarikh Pilihan</option>
+                    </select><input id="historyDate" type="date" aria-label="Tarikh transaksi" onchange="document.getElementById('historyFilter').value='date';renderHistory()" class="px-2 py-1 border border-gray-300 rounded text-sm">
                     <button onclick="clearHistory()"
                         class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition">Kosongkan</button>
                     <button onclick="closeModal('historyModal')" class="p-1 hover:bg-gray-100 rounded"><i
@@ -2214,23 +2214,24 @@
             const search = document.getElementById('invSearch')?.value?.toLowerCase() || '';
             const filter = document.getElementById('invCategoryFilter')?.value || 'all';
 
-            let list = appState.products;
+            // Sorting the inventory must not reorder the shared product cache.
+            let list = [...appState.products];
             if (search) list = list.filter(p => p.name.toLowerCase().includes(search) || (p.code && p.code.toLowerCase()
                 .includes(search)));
-            if (filter === 'low') list = list.filter(p => (p.stock || 0) <= (p.minStock || 5));
+            if (filter === 'low') list = list.filter(p => (p.stock ?? 0) <= (p.minStock ?? 5));
             if (filter === 'out') list = list.filter(p => (p.stock || 0) <= 0);
 
             // Sort: low stock first
             list.sort((a, b) => {
-                const aLow = (a.stock || 0) <= (a.minStock || 5);
-                const bLow = (b.stock || 0) <= (b.minStock || 5);
+                const aLow = (a.stock ?? 0) <= (a.minStock ?? 5);
+                const bLow = (b.stock ?? 0) <= (b.minStock ?? 5);
                 if (aLow && !bLow) return -1;
                 if (!aLow && bLow) return 1;
                 return (a.stock || 0) - (b.stock || 0);
             });
 
             document.getElementById('invTotalCount').textContent = list.length;
-            document.getElementById('invLowCount').textContent = list.filter(p => (p.stock || 0) <= (p.minStock || 5))
+            document.getElementById('invLowCount').textContent = list.filter(p => (p.stock ?? 0) <= (p.minStock ?? 5))
             .length;
             document.getElementById('invOutCount').textContent = list.filter(p => (p.stock || 0) <= 0).length;
 
@@ -2409,6 +2410,7 @@
         // ——— EXPORT INVENTORY REPORT ———
         function exportInventoryReport() {
             const now = new Date();
+            const escapeReport = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
             const dateStr = now.toLocaleDateString('ms-MY', { day: '2-digit', month: '2-digit', year: 'numeric' });
             let html = `<div class="inventory-report">
                         <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">Laporan Inventori - ${dateStr}</h2>
@@ -2416,14 +2418,13 @@
                         <table>
                             <thead><tr><th>Kod</th><th>Nama Produk</th><th>Kategori</th><th>Stok</th><th>Minimum</th><th>Status</th><th>Pembekal</th></tr></thead>
                             <tbody>`;
-            appState.products.sort((a, b) => (a.stock || 0) - (b.stock || 0));
-            appState.products.forEach(p => {
+            [...appState.products].sort((a, b) => (a.category || '').localeCompare(b.category || '', 'ms', { sensitivity: 'base' }) || (a.name || '').localeCompare(b.name || '', 'ms', { sensitivity: 'base' })).forEach(p => {
                 const stock = p.stock || 0;
-                const min = p.minStock || 5;
+                const min = p.minStock ?? 5;
                 const status = stock <= 0 ? 'Habis' : stock <= min ? 'Rendah' : 'OK';
                 const sup = p.supplierId ? getSupplierName(p.supplierId) : '-';
                 html +=
-                    `<tr><td>${p.code || '-'}</td><td>${p.name}</td><td>${p.category}</td><td style="text-align:center">${stock}</td><td style="text-align:center">${min}</td><td style="text-align:center">${status}</td><td>${sup}</td></tr>`;
+                    `<tr><td>${escapeReport(p.code || '-')}</td><td>${escapeReport(p.name)}</td><td>${escapeReport(p.category)}</td><td style="text-align:center">${stock}</td><td style="text-align:center">${min}</td><td style="text-align:center">${status}</td><td>${escapeReport(sup)}</td></tr>`;
             });
             html += `</tbody></table>
                         <p style="font-size:10px;color:#94a3b8;margin-top:12px;">Dijana pada ${new Date().toLocaleString('ms-MY')}</p>
@@ -2575,6 +2576,20 @@
 
         function hideContextMenu() { document.getElementById('contextMenu').classList.add('hidden'); }
 
+        function toggleDatabaseMenu(event) {
+            event.stopPropagation();
+            const panel = document.getElementById('databaseMenuPanel');
+            const opened = panel.classList.toggle('hidden') === false;
+            document.getElementById('databaseMenuButton').setAttribute('aria-expanded', String(opened));
+        }
+        document.addEventListener('click', event => {
+            const menu = document.getElementById('databaseMenu');
+            if (menu && !menu.contains(event.target)) {
+                document.getElementById('databaseMenuPanel').classList.add('hidden');
+                document.getElementById('databaseMenuButton').setAttribute('aria-expanded', 'false');
+            }
+        });
+
         // ——— HISTORY ———
         function showHistory() { renderHistory();
             openModal('historyModal'); }
@@ -2584,22 +2599,25 @@
             const filter = document.getElementById('historyFilter')?.value || 'all';
             let filtered = appState.transactions;
             const now = new Date();
-            if (filter === 'today') { filtered = filtered.filter(t => new Date(t.timestamp).toDateString() === now
-                    .toDateString()); } else if (filter === 'week') { const weekAgo = new Date(now.getTime() - 7 * 24 *
-                    60 * 60 * 1000);
-                filtered = filtered.filter(t => new Date(t.timestamp) >= weekAgo); } else if (filter === 'month') { const
-                    monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-                filtered = filtered.filter(t => new Date(t.timestamp) >= monthAgo); }
+            const dayKey = timestamp => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(timestamp));
+            const todayKey = dayKey(now);
+            let startKey = null, endKey = todayKey;
+            if (filter === 'today') startKey = todayKey;
+            if (filter === 'date') { startKey = document.getElementById('historyDate').value; endKey = startKey; }
+            if (filter === 'month') startKey = todayKey.slice(0, 8) + '01';
+            if (filter === 'week') { const d = new Date(todayKey + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); startKey = d.toISOString().slice(0, 10); }
+            if (filter === 'date' && !startKey) filtered = [];
+            else if (startKey) filtered = filtered.filter(t => { const key = dayKey(t.timestamp); return key >= startKey && key <= endKey; });
             document.getElementById('historyTotalCount').textContent = filtered.length;
-            document.getElementById('historyTotalSales').textContent = `RM ${filtered.reduce((s, t) => s + t.total, 0).toFixed(2)}`;
+            document.getElementById('historyTotalSales').textContent = `RM ${(filtered.reduce((s, t) => s + Math.round(Number(t.total) * 100), 0) / 100).toFixed(2)}`;
             if (filtered.length === 0) {
                 container.innerHTML =
                     `<div class="flex flex-col items-center justify-center py-8 text-gray-400"><i data-lucide="receipt" class="w-8 h-8 mb-1 opacity-30"></i><p class="text-xs">Tiada transaksi</p></div>`;
             } else {
                 container.innerHTML = filtered.map(txn => {
                     const date = new Date(txn.timestamp);
-                    const timeStr = date.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' });
-                    const dateStr = date.toLocaleDateString('ms-MY');
+                    const timeStr = date.toLocaleTimeString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit' });
+                    const dateStr = date.toLocaleDateString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' });
                     const payInfo = txn.paid ?
                         `<span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">Bayar RM ${txn.paid.toFixed(2)} | Baki RM ${(txn.balance || 0).toFixed(2)}</span>` :
                         '';
@@ -2884,6 +2902,9 @@
       <label class="text-xs font-medium text-slate-600">Dari<input id="dashFrom" type="date" class="block mt-1 border rounded px-3 py-2 text-sm"></label>
       <label class="text-xs font-medium text-slate-600">Hingga<input id="dashTo" type="date" class="block mt-1 border rounded px-3 py-2 text-sm"></label>
       <button onclick="dashPreset('today')" class="px-3 py-2 text-sm border rounded-lg">Hari ini</button><button onclick="dashPreset('week')" class="px-3 py-2 text-sm border rounded-lg">Minggu ini</button><button onclick="dashPreset('month')" class="px-3 py-2 text-sm border rounded-lg">Bulan ini</button><button onclick="loadDashboard()" class="px-4 py-2 bg-slate-900 text-white rounded-lg">Tapis</button>
+      <button onclick="printDailyReport()" class="px-4 py-2 border rounded-lg text-sm">Cetak laporan harian</button>
+      <p class="w-full text-xs text-slate-500">Tarikh berdasarkan masa transaksi di Malaysia (Asia/Kuala_Lumpur). Tarikh operasi asal tidak diubah.</p>
+      <p id="dashStatus" class="w-full text-sm" role="status" aria-live="polite"></p>
     </div>
     <div id="dashStats" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5"></div>
     <div class="grid lg:grid-cols-5 gap-5 mb-5">
@@ -2891,12 +2912,19 @@
       <article class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold mb-4">Kaedah Pembayaran</h3><div id="dashPayments" class="space-y-4"></div></article>
     </div>
     <div class="grid lg:grid-cols-2 gap-5">
-      <article class="bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold mb-3">Sejarah Transaksi</h3><div class="max-h-80 overflow-auto"><table class="w-full text-sm"><thead class="text-left text-slate-500"><tr><th>Resit</th><th>Masa</th><th>Juruwang</th><th class="text-right">Jumlah</th></tr></thead><tbody id="dashSales"></tbody></table></div></article>
-      <article class="bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold mb-1">Audit Sejarah Stok</h3><p class="text-xs text-slate-500 mb-3">Perubahan stok yang boleh diaudit</p><div class="max-h-80 overflow-auto"><table class="w-full text-sm"><thead class="text-left text-slate-500"><tr><th>Produk</th><th>Perubahan</th><th>Stok</th><th>Pengguna</th></tr></thead><tbody id="dashMoves"></tbody></table></div></article>
+      <article class="bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold mb-3">Sejarah Transaksi</h3><label class="text-xs">Cari resit atau item <input id="dashSearch" type="search" oninput="renderDashboardRows()" class="border rounded px-2 py-1 mb-2" /></label><div class="max-h-80 overflow-auto"><table class="w-full text-sm"><thead class="text-left text-slate-500"><tr><th>Resit</th><th>Masa</th><th>Bayaran</th><th class="text-right">Jumlah</th></tr></thead><tbody id="dashSales"></tbody></table></div><button id="dashSalesMore" hidden onclick="dashMore('sales')" class="mt-3 text-sm text-emerald-700">Tunjuk lagi</button></article>
+      <article class="bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold mb-1">Audit Sejarah Stok</h3><p class="text-xs text-slate-500 mb-3">Perubahan stok yang boleh diaudit</p><div class="max-h-80 overflow-auto"><table class="w-full text-sm"><thead class="text-left text-slate-500"><tr><th>Produk</th><th>Perubahan</th><th>Stok</th><th>Pengguna</th></tr></thead><tbody id="dashMoves"></tbody></table></div><button id="dashMovesMore" hidden onclick="dashMore('moves')" class="mt-3 text-sm text-emerald-700">Tunjuk lagi</button></article>
     </div>
+    <article class="mt-5 bg-white border border-slate-200 rounded-xl p-5">
+      <h3 class="font-bold">Log Audit Sistem</h3>
+      <p class="text-xs text-slate-500 mb-3">Perubahan yang direkodkan dalam tempoh pilihan. Klik sesuatu baris untuk melihat butiran sebelum dan selepas.</p>
+      <label class="text-xs">Cari tindakan atau entiti <input id="auditSearch" type="search" oninput="renderDashboardRows()" class="border rounded px-2 py-1 mb-2"></label>
+      <div class="max-h-96 overflow-auto"><table class="w-full text-sm"><thead class="text-left text-slate-500"><tr><th>Masa</th><th>Pengguna</th><th>Tindakan</th><th>Entiti</th><th>Butiran</th></tr></thead><tbody id="dashAudit"></tbody></table></div>
+      <button id="dashAuditMore" hidden onclick="dashMore('audits')" class="mt-3 text-sm text-emerald-700">Tunjuk lagi</button>
+    </article>
   </div>
 </section>
-<style>#dashboardView .dash-card{animation:dashIn .28s ease both}@keyframes dashIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}#dashChart svg{width:100%;height:100%;overflow:visible}</style>
+<style>#dashboardView .dash-card{animation:dashIn .28s ease both}@keyframes dashIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}#dashChart svg{width:100%;height:100%;overflow:visible}#dashboardView button{transition:transform .15s ease,box-shadow .15s ease}#dashboardView button:hover{transform:translateY(-1px)}#dashboardView button:focus-visible{outline:3px solid #10b981;outline-offset:2px}@media(prefers-reduced-motion:reduce){#dashboardView .dash-card{animation:none}#dashboardView button{transition:none}#dashboardView button:hover{transform:none}}</style>
 <script>
 window.showDashboard=async function(){document.getElementById('dashboardView').classList.remove('hidden');const n=new Date(),f=new Date(n.getFullYear(),n.getMonth(),1);dashFrom.value=dashFrom.value||f.toISOString().slice(0,10);dashTo.value=dashTo.value||n.toISOString().slice(0,10);await loadDashboard()};
 window.closeDashboard=()=>document.getElementById('dashboardView').classList.add('hidden');
@@ -2904,6 +2932,107 @@ window.dashPreset=k=>{const n=new Date(),s=new Date(n);if(k==='week')s.setDate(n
 const dashRM=v=>'RM '+Number(v||0).toFixed(2),dashEsc=v=>String(v??'').replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]));
 window.loadDashboard=async function(){const client=window.posClient;if(!client)return alert('Sambungan pangkalan data belum siap.');const {data:{session}}=await client.auth.getSession();const {data:profile}=await client.from('profiles').select('display_name,role,active').eq('id',session?.user?.id).single();if(!profile?.active||!['owner','admin','auditor'].includes(profile.role)){closeDashboard();return alert('Dashboard untuk Pemilik, Admin dan Juruaudit sahaja.')}dashIdentity.textContent=profile.display_name+' · '+profile.role;const {data,error}=await client.rpc('get_pos_report',{p_from:dashFrom.value,p_to:dashTo.value});if(error)return alert(error.message);const s=data.summary||{},p=data.payments||{};dashStats.innerHTML=[['Jumlah jualan',dashRM(s.sales_total)],['Jumlah transaksi',s.transaction_count||0],['Purata jualan',dashRM(s.average_sale)],['Cash / Card / QR',dashRM(p.cash)+' / '+dashRM(p.card)+' / '+dashRM(p.duitnow)]].map(x=>'<article class="dash-card bg-white border border-slate-200 rounded-xl p-5"><p class="text-sm text-slate-500">'+x[0]+'</p><p class="text-2xl font-bold mt-2">'+x[1]+'</p></article>').join('');dashPayments.innerHTML=['cash','card','duitnow'].map(k=>'<div><div class="flex justify-between text-sm mb-1"><span class="capitalize">'+k+'</span><b>'+dashRM(p[k])+'</b></div><div class="h-2 bg-slate-100 rounded"><div class="h-2 rounded bg-primary-600" style="width:'+Math.min(100,((p[k]||0)/(s.sales_total||1))*100)+'%"></div></div></div>').join('');const d=data.daily||[],m=Math.max(1,...d.map(x=>Number(x.sales_total)));dashChart.innerHTML=d.length?'<svg viewBox="0 0 '+Math.max(400,d.length*54)+' 210" preserveAspectRatio="none">'+d.map((x,i)=>{const h=160*Number(x.sales_total)/m;return '<g><rect x="'+(i*54+16)+'" y="'+(178-h)+'" width="30" height="'+h+'" rx="5" fill="#059669"/><text x="'+(i*54+31)+'" y="200" text-anchor="middle" font-size="9" fill="#64748b">'+String(x.business_date).slice(5)+'</text><title>'+dashRM(x.sales_total)+' · '+x.transactions+' transaksi</title></g>'}).join('')+'</svg>':'<p class="text-sm text-slate-400 py-16 text-center">Tiada jualan dalam tempoh ini.</p>';dashSales.innerHTML=(data.sales||[]).map(x=>'<tr class="border-b border-slate-100"><td class="py-2 font-mono text-xs">'+dashEsc(x.receipt_number)+'</td><td>'+new Date(x.completed_at).toLocaleString('ms-MY')+'</td><td>'+dashEsc(x.cashier)+'</td><td class="text-right font-semibold">'+dashRM(x.total)+'</td></tr>').join('')||'<tr><td colspan="4" class="py-5 text-center text-slate-400">Tiada transaksi.</td></tr>';dashMoves.innerHTML=(data.stock_movements||[]).map(x=>'<tr class="border-b border-slate-100"><td class="py-2"><b>'+dashEsc(x.product_name)+'</b><br><span class="text-xs text-slate-400">'+dashEsc(x.category)+'</span></td><td class="'+(x.quantity_delta>0?'text-emerald-700':'text-rose-700')+'">'+(x.quantity_delta>0?'+':'')+x.quantity_delta+'</td><td>'+x.quantity_before+' → '+x.quantity_after+'</td><td>'+dashEsc(x.performed_by)+'</td></tr>').join('')||'<tr><td colspan="4" class="py-5 text-center text-slate-400">Tiada audit stok.</td></tr>';lucide.createIcons()};
 </script>
+<script>
+// Read-only reporting uses completion timestamps, not editable business-day labels.
+(() => {
+  let records = [], moves = [], audits = [], serial = 0, loadedFrom = null, loadedTo = null;
+  let salesLimit = 200, movesLimit = 200, auditsLimit = 200;
+  const el = id => document.getElementById(id);
+  const localDay = value => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+  const localTime = value => new Intl.DateTimeFormat('ms-MY',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'short',timeStyle:'short'}).format(new Date(value));
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const sen = value => Math.round(Number(value || 0) * 100);
+  const rm = cents => 'RM ' + (cents / 100).toFixed(2);
+  const bounds = (from,to) => [new Date(from+'T00:00:00+08:00').toISOString(),new Date(Date.parse(to+'T00:00:00+08:00')+86400000).toISOString()];
+  async function pages(table, columns, field, from, to, extra) {
+    const all = [];
+    for(let offset=0;;offset+=500) {
+      let q=window.posClient.from(table).select(columns).gte(field,from).lt(field,to).order(field,{ascending:false}).order('id',{ascending:false}).range(offset,offset+499);
+      if(extra) q=extra(q);
+      const {data,error}=await q;
+      if(error) throw error;
+      all.push(...data);
+      if(data.length<500) return all;
+    }
+  }
+  window.showDashboard = async () => {
+    el('dashboardView').classList.remove('hidden');
+    const today=localDay(new Date());
+    el('dashTo').value ||= today;
+    el('dashFrom').value ||= today.slice(0,8)+'01';
+    await window.loadDashboard();
+  };
+  window.dashPreset = key => {
+    const today=localDay(new Date()), d=new Date(today+'T00:00:00Z');
+    if(key==='week') d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7);
+    if(key==='month') d.setUTCDate(1);
+    el('dashFrom').value=d.toISOString().slice(0,10);
+    el('dashTo').value=today;
+    window.loadDashboard();
+  };
+  window.loadDashboard = async () => {
+    const token=++serial, from=el('dashFrom').value, to=el('dashTo').value, status=el('dashStatus');
+    if(!from || !to || from>to) {status.textContent='Pilih julat tarikh yang sah.';return;}
+    status.textContent='Memuatkan data lengkap…';
+    try {
+      const client=window.posClient;
+      if(!client) throw new Error('Sambungan pangkalan data belum siap.');
+      const {data:{session},error:sessionError}=await client.auth.getSession();
+      if(sessionError || !session) throw new Error('Sesi tamat. Sila log masuk semula.');
+      const {data:profile,error:profileError}=await client.from('profiles').select('display_name,role,active').eq('id',session.user.id).single();
+      if(profileError || !profile?.active || !['owner','admin','auditor'].includes(profile.role)) throw new Error('Akses dashboard tidak dibenarkan.');
+      el('dashIdentity').textContent=profile.display_name+' · '+profile.role;
+      const [start,end]=bounds(from,to);
+      const [salesData,movementData,auditData]=await Promise.all([
+        pages('sales','id,receipt_number,business_date,completed_at,total,payments(method,amount,status),sale_items(product_name_snapshot,quantity,line_total)','completed_at',start,end,q=>q.eq('status','completed')),
+        pages('stock_movements','id,created_at,kind,quantity_delta,quantity_before,quantity_after,reason,product:products(name),actor:profiles!stock_movements_performed_by_fkey(display_name)','created_at',start,end),
+        pages('audit_logs','id,created_at,action,entity_type,entity_id,before_data,after_data,actor:profiles!audit_logs_actor_id_fkey(display_name)','created_at',start,end)
+      ]);
+      if(token!==serial)return;
+      records=salesData; moves=movementData; audits=auditData; loadedFrom=from; loadedTo=to;
+      salesLimit=200; movesLimit=200; auditsLimit=200;
+      const total=records.reduce((n,s)=>n+sen(s.total),0), payments={cash:0,card:0,duitnow:0};
+      records.forEach(s=>(s.payments||[]).filter(p=>p.status==='paid').forEach(p=>{if(p.method in payments) payments[p.method]+=sen(p.amount)}));
+      el('dashStats').innerHTML=[['Jumlah jualan',rm(total)],['Jumlah transaksi',records.length],['Purata jualan',rm(records.length?Math.round(total/records.length):0)],['Pergerakan stok',moves.length]].map(([label,value])=>'<article class="dash-card bg-white border border-slate-200 rounded-xl p-5"><p class="text-sm text-slate-500">'+label+'</p><p class="text-2xl font-bold mt-2">'+value+'</p></article>').join('');
+      el('dashPayments').innerHTML=Object.entries(payments).map(([method,value])=>'<div class="flex justify-between text-sm"><span>'+esc(method)+'</span><strong>'+rm(value)+'</strong></div>').join('');
+      const daily=new Map();
+      records.forEach(s=>{const day=localDay(s.completed_at), x=daily.get(day)||{amount:0,count:0};x.amount+=sen(s.total);x.count++;daily.set(day,x)});
+      const rows=[...daily.entries()].sort((a,b)=>a[0].localeCompare(b[0])), max=Math.max(1,...rows.map(x=>x[1].amount));
+      el('dashChart').innerHTML=rows.length?'<div class="h-full flex items-end gap-2 overflow-x-auto">'+rows.map(([day,v])=>'<button class="min-w-12 text-xs text-slate-600 flex flex-col justify-end items-center h-full" onclick="dashSelectDay(\''+day+'\')" title="'+esc(day+' · '+rm(v.amount)+' · '+v.count+' transaksi')+'"><span class="bg-emerald-600 rounded-t w-8" style="height:'+Math.max(3,Math.round(v.amount/max*150))+'px"></span><span>'+esc(day.slice(5))+'</span></button>').join('')+'</div>':'<p class="text-sm text-slate-500">Tiada jualan dalam tempoh ini.</p>';
+      const mismatch=records.filter(s=>s.business_date!==localDay(s.completed_at)).length;
+      status.textContent=records.length+' jualan, '+moves.length+' pergerakan dan '+audits.length+' rekod audit dimuatkan. '+mismatch+' jualan mempunyai tarikh operasi berbeza daripada tarikh transaksi. Jumlah menggunakan semua rekod yang dimuatkan.';
+      window.renderDashboardRows();
+    } catch(error) {
+      if(token!==serial)return;
+      records=[];moves=[];audits=[];loadedFrom=null;loadedTo=null;
+      ['dashStats','dashPayments','dashChart','dashSales','dashMoves','dashAudit'].forEach(id=>el(id).replaceChildren());
+      status.textContent='Gagal memuatkan laporan: '+(error.message||error);
+    }
+  };
+  window.dashSelectDay=day=>{el('dashFrom').value=day;el('dashTo').value=day;window.loadDashboard()};
+  window.renderDashboardRows=()=>{
+    const term=el('dashSearch').value.trim().toLowerCase();
+    const filtered=records.filter(s=>(s.receipt_number+' '+(s.sale_items||[]).map(i=>i.product_name_snapshot).join(' ')).toLowerCase().includes(term));
+    el('dashSales').innerHTML=filtered.slice(0,salesLimit).map(s=>'<tr class="border-b"><td class="py-2">'+esc(s.receipt_number)+'</td><td>'+esc(localTime(s.completed_at))+'</td><td>'+esc((s.payments||[]).map(p=>p.method).join(', ')||'—')+'</td><td class="text-right">'+rm(sen(s.total))+'</td></tr>').join('')||'<tr><td colspan="4">Tiada transaksi.</td></tr>';
+    el('dashMoves').innerHTML=moves.slice(0,movesLimit).map(m=>'<tr class="border-b" title="'+esc(m.reason||m.kind)+'"><td class="py-2">'+esc(m.product?.name||'—')+'<br><small>'+esc(localTime(m.created_at))+' · '+esc(m.reason||m.kind)+'</small></td><td>'+esc(m.quantity_delta)+'</td><td>'+esc(m.quantity_before)+' → '+esc(m.quantity_after)+'</td><td>'+esc(m.actor?.display_name||'—')+'</td></tr>').join('')||'<tr><td colspan="4">Tiada pergerakan stok.</td></tr>';
+    const auditTerm=el('auditSearch').value.trim().toLowerCase();
+    const filteredAudits=audits.filter(a=>(a.action+' '+a.entity_type+' '+a.entity_id).toLowerCase().includes(auditTerm));
+    el('dashAudit').innerHTML=filteredAudits.slice(0,auditsLimit).map(a=>'<tr class="border-b"><td class="py-2">'+esc(localTime(a.created_at))+'</td><td>'+esc(a.actor?.display_name||'Sistem')+'</td><td>'+esc(a.action)+'</td><td>'+esc(a.entity_type)+'</td><td><details><summary class="cursor-pointer">Lihat</summary><pre class="whitespace-pre-wrap break-all text-xs">'+esc(JSON.stringify({sebelum:a.before_data,selepas:a.after_data},null,2))+'</pre></details></td></tr>').join('')||'<tr><td colspan="5">Tiada rekod audit.</td></tr>';
+    for (const [id, count, limit] of [['dashSalesMore',filtered.length,salesLimit],['dashMovesMore',moves.length,movesLimit],['dashAuditMore',filteredAudits.length,auditsLimit]]) { const button=el(id); button.hidden=count<=limit; button.textContent='Tunjuk lagi ('+Math.min(limit,count)+' / '+count+')'; }
+  };
+  window.dashMore=kind=>{if(kind==='sales')salesLimit+=200;else if(kind==='moves')movesLimit+=200;else if(kind==='audits')auditsLimit+=200;window.renderDashboardRows()};
+  window.printDailyReport=()=>{
+    if(el('dashFrom').value!==el('dashTo').value){el('dashStatus').textContent='Pilih satu hari yang sama pada Dari dan Hingga untuk laporan harian.';return;}
+    if(loadedFrom!==el('dashFrom').value || loadedTo!==el('dashTo').value || el('dashStatus').textContent.startsWith('Memuat')) {el('dashStatus').textContent='Tekan Tapis dan tunggu laporan siap sebelum mencetak.';return;}
+    const w=window.open('','_blank');if(!w){el('dashStatus').textContent='Benarkan pop-up untuk mencetak laporan.';return;}
+    const total=records.reduce((n,s)=>n+sen(s.total),0);
+    w.document.write('<!doctype html><html><head><title>Laporan harian</title><style>body{font:14px sans-serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{padding:6px;border-bottom:1px solid #ddd;text-align:left}</style></head><body><h1>Laporan Harian</h1><p>Tarikh Malaysia: '+esc(el('dashFrom').value)+' · '+records.length+' transaksi · '+rm(total)+'</p><p>Bayaran: '+esc(el('dashPayments').innerText)+'</p><h2>Transaksi</h2><table><tr><th>Resit</th><th>Masa</th><th>Item</th><th>Jumlah</th></tr>'+records.map(s=>'<tr><td>'+esc(s.receipt_number)+'</td><td>'+esc(localTime(s.completed_at))+'</td><td>'+esc((s.sale_items||[]).map(i=>i.quantity+' × '+i.product_name_snapshot).join(', '))+'</td><td>'+rm(sen(s.total))+'</td></tr>').join('')+'</table><h2>Pergerakan stok</h2><table><tr><th>Masa</th><th>Produk</th><th>Perubahan</th><th>Sebab</th></tr>'+moves.map(m=>'<tr><td>'+esc(localTime(m.created_at))+'</td><td>'+esc(m.product?.name||'—')+'</td><td>'+esc(m.quantity_before)+' → '+esc(m.quantity_after)+'</td><td>'+esc(m.reason||m.kind)+'</td></tr>').join('')+'</table></body></html>');
+    w.document.close();w.print();
+  };
+})();
+</script>
 </body>
 
 </html>
+
+
