@@ -39,6 +39,7 @@
     guestBadge.classList.add('hidden');
     document.getElementById('btnAddProduct').classList.toggle('hidden', !isManagement);
     document.getElementById('btnSettings').classList.toggle('hidden', role !== 'owner');
+    document.getElementById('dashboardLink')?.classList.toggle('hidden', !['owner', 'admin', 'auditor'].includes(role));
     document.querySelectorAll('[onclick="showImportModal()"]').forEach(el => el.classList.toggle('hidden', !isOwnerOrAdmin));
     document.querySelectorAll('[onclick="showSuppliers()"]').forEach(el => el.classList.toggle('hidden', !isManagement));
     document.querySelectorAll('[onclick="showStockHistory()"]').forEach(el => el.classList.toggle('hidden', !isManagement && !isAuditor));
