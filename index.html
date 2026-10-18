@@ -614,9 +614,7 @@
                 <button onclick="showAddProduct()" id="btnAddProduct"
                     class="hidden p-1.5 bg-primary-600 hover:bg-primary-700 rounded transition btn-press"
                     title="Tambah Produk"><i data-lucide="plus" class="w-4 h-4"></i></button>
-                <div class="relative group">
-                    <button class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press"
-                        title="Database"><i data-lucide="database" class="w-4 h-4"></i></button>
+                <div class="relative" id="databaseMenu"><button onclick="toggleDatabaseMenu(event)" id="databaseMenuButton" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press" title="Database"><i data-lucide="database" class="w-4 h-4"></i></button>
                     <div
                         id="databaseMenuPanel" class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 hidden z-50 text-sm">
                         <button onclick="exportDatabase()"
@@ -1105,8 +1103,8 @@
                         <option value="all">Semua</option>
                         <option value="today">Hari Ini</option>
                         <option value="week">Minggu Ini</option>
-                        <option value="month">Bulan Ini</option><option value="date">Tarikh Pilihan</option>
-                    </select>
+                        <option value="month">Bulan Ini</option><option value="date">Tarikh Pilihan</option><option value="date">Tarikh Pilihan</option>
+                    </select><input id="historyDate" type="date" onchange="renderHistory()" class="px-2 py-1 border border-gray-300 rounded text-sm">
                     <button onclick="clearHistory()"
                         class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition">Kosongkan</button>
                     <button onclick="closeModal('historyModal')" class="p-1 hover:bg-gray-100 rounded"><i
