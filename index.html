@@ -510,6 +510,32 @@
             align-items: center;
             border-radius: 12px;
         }
+        /* Keep the counter interface calm, readable and fast. */
+        .product-card {
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .04);
+            transition: box-shadow .18s ease, border-color .18s ease, transform .18s ease;
+        }
+        .product-card:hover {
+            border-color: #a7f3d0;
+            box-shadow: 0 7px 20px rgba(6, 78, 59, .09);
+            transform: translateY(-2px);
+        }
+        .cart-sidebar { box-shadow: -8px 0 24px rgba(15, 23, 42, .05); }
+        button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+            outline: 3px solid #10b981;
+            outline-offset: 2px;
+        }
+        .modal-overlay:not(.hidden) > div { animation: pos-dialog-in .18s ease-out both; }
+        @keyframes pos-dialog-in {
+            from { opacity: 0; transform: translateY(8px) scale(.99); }
+            to { opacity: 1; transform: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .product-card { transition: none; }
+            .product-card:hover { transform: none; }
+            .modal-overlay:not(.hidden) > div { animation: none; }
+        }
     </style>
     <script>
         tailwind.config = {
@@ -593,28 +619,28 @@
             </div>
             <div class="flex items-center gap-1">
                 <button id="storeStateBtn" onclick="toggleStoreState()" class="hidden px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-[10px]" title="Buka atau tutup jualan">STORE</button>
-                <button onclick="showDashboard()" id="dashboardLink" class="hidden p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition" title="Dashboard & Audit"><i data-lucide="layout-dashboard" class="w-4 h-4"></i></button>
+                <button onclick="showDashboard()" id="dashboardLink" class="hidden p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition" title="Dashboard & Audit" aria-label="Dashboard dan audit"><i data-lucide="layout-dashboard" class="w-4 h-4"></i></button>
                 <div class="relative">
                     <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input type="text" id="searchInput" placeholder="Cari produk..."
                         class="pl-7 pr-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs focus:outline-none focus:border-primary-500 w-44 text-white placeholder-slate-500">
                 </div>
                 <button onclick="showInventory()"
-                    class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press relative" title="Inventori (I)">
+                    class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press relative" title="Inventori (I)" aria-label="Inventori">
                     <i data-lucide="package" class="w-4 h-4"></i>
                     <span id="invDot"
                         class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full hidden"></span>
                 </button>
                 <button onclick="showCalculator()"
-                    class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press" title="Kalkulator (C)"><i
+                    class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press" title="Kalkulator (C)" aria-label="Kalkulator"><i
                         data-lucide="calculator" class="w-4 h-4"></i></button>
                 <button onclick="showHistory()"
-                    class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press" title="Sejarah Transaksi"><i
+                    class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press" title="Sejarah Transaksi" aria-label="Sejarah transaksi"><i
                         data-lucide="history" class="w-4 h-4"></i></button>
                 <button onclick="showAddProduct()" id="btnAddProduct"
                     class="hidden p-1.5 bg-primary-600 hover:bg-primary-700 rounded transition btn-press"
-                    title="Tambah Produk"><i data-lucide="plus" class="w-4 h-4"></i></button>
-                <div class="relative" id="databaseMenu"><button onclick="toggleDatabaseMenu(event)" id="databaseMenuButton" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press" title="Database"><i data-lucide="database" class="w-4 h-4"></i></button>
+                    title="Tambah Produk" aria-label="Tambah produk"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                <div class="relative" id="databaseMenu"><button onclick="toggleDatabaseMenu(event)" id="databaseMenuButton" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded transition btn-press" title="Database" aria-label="Menu pangkalan data" aria-expanded="false" aria-controls="databaseMenuPanel"><i data-lucide="database" class="w-4 h-4"></i></button>
                     <div
                         id="databaseMenuPanel" class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 hidden z-50 text-sm">
                         <button onclick="exportDatabase()"
@@ -652,11 +678,11 @@
                 </div>
                 <div class="p-2 border-t border-slate-700 bg-slate-900 space-y-1 flex-shrink-0 stats-bar">
                     <div class="flex items-center justify-between text-xs stat-item">
-                        <span class="text-slate-400">Jualan Hari Ini</span>
+                        <span class="text-slate-400">Bersih Hari Ini</span>
                         <span class="font-bold text-primary-400 stat-value" id="dailySales">RM 0.00</span>
                     </div>
                     <div class="flex items-center justify-between text-xs stat-item">
-                        <span class="text-slate-400">Transaksi</span>
+                        <span class="text-slate-400">Jualan asal</span>
                         <span class="font-semibold text-white stat-value" id="dailyCount">0</span>
                     </div>
                     <div class="flex items-center justify-between text-xs stat-item border-t border-slate-700 pt-1">
@@ -1105,16 +1131,14 @@
                         <option value="week">Minggu Ini</option>
                         <option value="month">Bulan Ini</option><option value="date">Tarikh Pilihan</option>
                     </select><input id="historyDate" type="date" aria-label="Tarikh transaksi" onchange="document.getElementById('historyFilter').value='date';renderHistory()" class="px-2 py-1 border border-gray-300 rounded text-sm">
-                    <button onclick="clearHistory()"
-                        class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition">Kosongkan</button>
                     <button onclick="closeModal('historyModal')" class="p-1 hover:bg-gray-100 rounded"><i
                             data-lucide="x" class="w-4 h-4 text-gray-500"></i></button>
                 </div>
             </div>
             <div class="flex-1 overflow-y-auto custom-scrollbar p-3" id="historyList"></div>
             <div class="p-2 border-t border-gray-200 bg-gray-50 flex justify-between text-xs flex-shrink-0">
-                <span class="text-gray-600">Jumlah Transaksi: <b id="historyTotalCount">0</b></span>
-                <span class="text-gray-600">Jumlah Jualan: <b class="text-primary-600" id="historyTotalSales">RM
+                <span class="text-gray-600">Rekod jualan asal: <b id="historyTotalCount">0</b></span>
+                <span class="text-gray-600">Jualan asal (termasuk pembetulan): <b class="text-primary-600" id="historyTotalSales">RM
                         0.00</b></span>
             </div>
         </div>
@@ -2365,6 +2389,7 @@
 
         function renderStockHistory() {
             const container = document.getElementById('stockHistoryList');
+            const safe = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
             const search = document.getElementById('stockHistorySearch')?.value?.toLowerCase() || '';
             let list = appState.stockHistory;
             if (search) {
@@ -2386,19 +2411,19 @@
                 const date = new Date(h.timestamp);
                 const timeStr = date.toLocaleString('ms-MY', { day: '2-digit', month: 'short', hour: '2-digit',
                     minute: '2-digit' });
-                const typeLabels = { 'restock': 'Tambah Stok', 'sale': 'Jualan', 'adjust': 'Pelarasan' };
+                const typeLabels = { 'restock': 'Tambah Stok', 'sale': 'Jualan', 'adjust': 'Pelarasan', 'adjustment':'Pelarasan', 'void_reversal':'Pembetulan Jualan' };
                 const typeColor = { 'restock': 'text-green-600 bg-green-50',
                     'sale': 'text-red-600 bg-red-50',
                 'adjust': 'text-blue-600 bg-blue-50' };
                 const qtyStr = h.quantity > 0 ? `+${h.quantity}` : `${h.quantity}`;
                 return `<div class="bg-gray-50 rounded p-2 mb-1 border border-gray-100 flex items-center justify-between">
                             <div class="flex-1 min-w-0">
-                                <div class="text-sm font-medium text-gray-800 truncate">${name}</div>
+                                <div class="text-sm font-medium text-gray-800 truncate">${safe(name)}</div>
                                 <div class="text-xs text-gray-500 flex gap-2 flex-wrap">
-                                    <span class="px-1.5 py-0.5 rounded ${typeColor[h.type] || 'bg-gray-100 text-gray-600'}">${typeLabels[h.type] || h.type}</span>
+                                    <span class="px-1.5 py-0.5 rounded ${typeColor[h.type] || 'bg-gray-100 text-gray-600'}">${safe(typeLabels[h.type] || h.type)}</span>
                                     <span>${qtyStr}</span>
                                     <span>Stok: ${h.previousStock} → ${h.newStock}</span>
-                                    ${h.note ? `<span class="italic">${h.note}</span>` : ''}
+                                    ${h.note ? `<span class="italic">${safe(h.note)}</span>` : ''}
                                 </div>
                             </div>
                             <div class="text-[10px] text-gray-400 flex-shrink-0 ml-2">${timeStr}</div>
@@ -2891,7 +2916,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./pos-config.js"></script>
-    <script src="./supabase-adapter-v2.js?v=20261018-reporting"></script>
+    <script src="./supabase-adapter-v2.js?v=20261020-reversals"></script>
 <section id="dashboardView" class="fixed inset-0 z-[90] hidden overflow-y-auto bg-slate-50">
   <div class="max-w-7xl mx-auto p-4 md:p-7">
     <header class="flex flex-wrap gap-4 justify-between items-center mb-6">
@@ -2908,8 +2933,8 @@
     </div>
     <div id="dashStats" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5"></div>
     <div class="grid lg:grid-cols-5 gap-5 mb-5">
-      <article class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold">Trend Jualan Harian</h3><p class="text-xs text-slate-500 mb-3">Jumlah jualan bagi tempoh pilihan</p><div id="dashChart" class="h-56"></div></article>
-      <article class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold mb-4">Kaedah Pembayaran</h3><div id="dashPayments" class="space-y-4"></div></article>
+      <article class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold">Trend Jualan Asal Harian</h3><p class="text-xs text-slate-500 mb-3">Jualan kasar sebelum pembetulan; tekan bar untuk melihat hari tersebut.</p><div id="dashChart" class="h-56"></div></article>
+      <article class="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold mb-4">Kaedah Pembayaran Asal</h3><div id="dashPayments" class="space-y-4"></div></article>
     </div>
     <div class="grid lg:grid-cols-2 gap-5">
       <article class="bg-white border border-slate-200 rounded-xl p-5"><h3 class="font-bold mb-3">Sejarah Transaksi</h3><label class="text-xs">Cari resit atau item <input id="dashSearch" type="search" oninput="renderDashboardRows()" class="border rounded px-2 py-1 mb-2" /></label><div class="max-h-80 overflow-auto"><table class="w-full text-sm"><thead class="text-left text-slate-500"><tr><th>Resit</th><th>Masa</th><th>Bayaran</th><th class="text-right">Jumlah</th></tr></thead><tbody id="dashSales"></tbody></table></div><button id="dashSalesMore" hidden onclick="dashMore('sales')" class="mt-3 text-sm text-emerald-700">Tunjuk lagi</button></article>
@@ -2935,7 +2960,7 @@ window.loadDashboard=async function(){const client=window.posClient;if(!client)r
 <script>
 // Read-only reporting uses completion timestamps, not editable business-day labels.
 (() => {
-  let records = [], moves = [], audits = [], serial = 0, loadedFrom = null, loadedTo = null;
+  let records = [], moves = [], audits = [], reversals = [], serial = 0, loadedFrom = null, loadedTo = null;
   let salesLimit = 200, movesLimit = 200, auditsLimit = 200;
   const el = id => document.getElementById(id);
   const localDay = value => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
@@ -2983,28 +3008,30 @@ window.loadDashboard=async function(){const client=window.posClient;if(!client)r
       if(profileError || !profile?.active || !['owner','admin','auditor'].includes(profile.role)) throw new Error('Akses dashboard tidak dibenarkan.');
       el('dashIdentity').textContent=profile.display_name+' · '+profile.role;
       const [start,end]=bounds(from,to);
-      const [salesData,movementData,auditData]=await Promise.all([
+      const [salesData,movementData,auditData,reversalData]=await Promise.all([
         pages('sales','id,receipt_number,business_date,completed_at,total,payments(method,amount,status),sale_items(product_name_snapshot,quantity,line_total)','completed_at',start,end,q=>q.eq('status','completed')),
         pages('stock_movements','id,created_at,kind,quantity_delta,quantity_before,quantity_after,reason,product:products(name),actor:profiles!stock_movements_performed_by_fkey(display_name)','created_at',start,end),
-        pages('audit_logs','id,created_at,action,entity_type,entity_id,before_data,after_data,actor:profiles!audit_logs_actor_id_fkey(display_name)','created_at',start,end)
+        pages('audit_logs','id,created_at,action,entity_type,entity_id,before_data,after_data,actor:profiles!audit_logs_actor_id_fkey(display_name)','created_at',start,end),
+        pages('sale_reversals','id,created_at,reason,money_status,sale:sales(receipt_number,total)','created_at',start,end)
       ]);
       if(token!==serial)return;
-      records=salesData; moves=movementData; audits=auditData; loadedFrom=from; loadedTo=to;
+      records=salesData; moves=movementData; audits=auditData; reversals=reversalData; loadedFrom=from; loadedTo=to;
       salesLimit=200; movesLimit=200; auditsLimit=200;
       const total=records.reduce((n,s)=>n+sen(s.total),0), payments={cash:0,card:0,duitnow:0};
       records.forEach(s=>(s.payments||[]).filter(p=>p.status==='paid').forEach(p=>{if(p.method in payments) payments[p.method]+=sen(p.amount)}));
-      el('dashStats').innerHTML=[['Jumlah jualan',rm(total)],['Jumlah transaksi',records.length],['Purata jualan',rm(records.length?Math.round(total/records.length):0)],['Pergerakan stok',moves.length]].map(([label,value])=>'<article class="dash-card bg-white border border-slate-200 rounded-xl p-5"><p class="text-sm text-slate-500">'+label+'</p><p class="text-2xl font-bold mt-2">'+value+'</p></article>').join('');
+      const reversedTotal=reversals.reduce((n,r)=>n+sen(r.sale?.total),0);
+      el('dashStats').innerHTML=[['Jualan asal (kasar)',rm(total)],['Jualan dibetulkan dalam tempoh',rm(reversedTotal)],['Jualan bersih (jualan − pembetulan)',rm(total-reversedTotal)],['Rekod jualan asal',records.length],['Pergerakan stok',moves.length]].map(([label,value])=>'<article class="dash-card bg-white border border-slate-200 rounded-xl p-5"><p class="text-sm text-slate-500">'+label+'</p><p class="text-2xl font-bold mt-2">'+value+'</p></article>').join('');
       el('dashPayments').innerHTML=Object.entries(payments).map(([method,value])=>'<div class="flex justify-between text-sm"><span>'+esc(method)+'</span><strong>'+rm(value)+'</strong></div>').join('');
       const daily=new Map();
       records.forEach(s=>{const day=localDay(s.completed_at), x=daily.get(day)||{amount:0,count:0};x.amount+=sen(s.total);x.count++;daily.set(day,x)});
       const rows=[...daily.entries()].sort((a,b)=>a[0].localeCompare(b[0])), max=Math.max(1,...rows.map(x=>x[1].amount));
       el('dashChart').innerHTML=rows.length?'<div class="h-full flex items-end gap-2 overflow-x-auto">'+rows.map(([day,v])=>'<button class="min-w-12 text-xs text-slate-600 flex flex-col justify-end items-center h-full" onclick="dashSelectDay(\''+day+'\')" title="'+esc(day+' · '+rm(v.amount)+' · '+v.count+' transaksi')+'"><span class="bg-emerald-600 rounded-t w-8" style="height:'+Math.max(3,Math.round(v.amount/max*150))+'px"></span><span>'+esc(day.slice(5))+'</span></button>').join('')+'</div>':'<p class="text-sm text-slate-500">Tiada jualan dalam tempoh ini.</p>';
       const mismatch=records.filter(s=>s.business_date!==localDay(s.completed_at)).length;
-      status.textContent=records.length+' jualan, '+moves.length+' pergerakan dan '+audits.length+' rekod audit dimuatkan. '+mismatch+' jualan mempunyai tarikh operasi berbeza daripada tarikh transaksi. Jumlah menggunakan semua rekod yang dimuatkan.';
+      status.textContent=records.length+' jualan asal, '+reversals.length+' pembetulan, '+moves.length+' pergerakan dan '+audits.length+' rekod audit dimuatkan. Pembetulan dikira pada tarikh dibuat; jumlah bayaran ialah bayaran asal, bukan bukti pemulangan wang. '+mismatch+' jualan mempunyai tarikh operasi berbeza daripada tarikh transaksi.';
       window.renderDashboardRows();
     } catch(error) {
       if(token!==serial)return;
-      records=[];moves=[];audits=[];loadedFrom=null;loadedTo=null;
+      records=[];moves=[];audits=[];reversals=[];loadedFrom=null;loadedTo=null;
       ['dashStats','dashPayments','dashChart','dashSales','dashMoves','dashAudit'].forEach(id=>el(id).replaceChildren());
       status.textContent='Gagal memuatkan laporan: '+(error.message||error);
     }
@@ -3026,7 +3053,8 @@ window.loadDashboard=async function(){const client=window.posClient;if(!client)r
     if(loadedFrom!==el('dashFrom').value || loadedTo!==el('dashTo').value || el('dashStatus').textContent.startsWith('Memuat')) {el('dashStatus').textContent='Tekan Tapis dan tunggu laporan siap sebelum mencetak.';return;}
     const w=window.open('','_blank');if(!w){el('dashStatus').textContent='Benarkan pop-up untuk mencetak laporan.';return;}
     const total=records.reduce((n,s)=>n+sen(s.total),0);
-    w.document.write('<!doctype html><html><head><title>Laporan harian</title><style>body{font:14px sans-serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{padding:6px;border-bottom:1px solid #ddd;text-align:left}</style></head><body><h1>Laporan Harian</h1><p>Tarikh Malaysia: '+esc(el('dashFrom').value)+' · '+records.length+' transaksi · '+rm(total)+'</p><p>Bayaran: '+esc(el('dashPayments').innerText)+'</p><h2>Transaksi</h2><table><tr><th>Resit</th><th>Masa</th><th>Item</th><th>Jumlah</th></tr>'+records.map(s=>'<tr><td>'+esc(s.receipt_number)+'</td><td>'+esc(localTime(s.completed_at))+'</td><td>'+esc((s.sale_items||[]).map(i=>i.quantity+' × '+i.product_name_snapshot).join(', '))+'</td><td>'+rm(sen(s.total))+'</td></tr>').join('')+'</table><h2>Pergerakan stok</h2><table><tr><th>Masa</th><th>Produk</th><th>Perubahan</th><th>Sebab</th></tr>'+moves.map(m=>'<tr><td>'+esc(localTime(m.created_at))+'</td><td>'+esc(m.product?.name||'—')+'</td><td>'+esc(m.quantity_before)+' → '+esc(m.quantity_after)+'</td><td>'+esc(m.reason||m.kind)+'</td></tr>').join('')+'</table></body></html>');
+    const reversedTotal=reversals.reduce((n,r)=>n+sen(r.sale?.total),0);
+    w.document.write('<!doctype html><html><head><title>Laporan harian</title><style>body{font:14px sans-serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{padding:6px;border-bottom:1px solid #ddd;text-align:left}</style></head><body><h1>Laporan Harian</h1><p>Tarikh Malaysia: '+esc(el('dashFrom').value)+' · '+records.length+' jualan asal · kasar '+rm(total)+' · pembetulan '+rm(reversedTotal)+' · bersih '+rm(total-reversedTotal)+'</p><p>Bayaran asal (bukan bukti pemulangan wang): '+esc(el('dashPayments').innerText)+'</p><h2>Pembetulan pada hari ini</h2><table><tr><th>Resit</th><th>Masa</th><th>Sebab</th><th>Status wang</th><th>Jumlah jualan asal</th></tr>'+reversals.map(r=>'<tr><td>'+esc(r.sale?.receipt_number||'—')+'</td><td>'+esc(localTime(r.created_at))+'</td><td>'+esc(r.reason)+'</td><td>'+esc(r.money_status)+'</td><td>'+rm(sen(r.sale?.total))+'</td></tr>').join('')+'</table><h2>Transaksi asal</h2><table><tr><th>Resit</th><th>Masa</th><th>Item</th><th>Jumlah</th></tr>'+records.map(s=>'<tr><td>'+esc(s.receipt_number)+'</td><td>'+esc(localTime(s.completed_at))+'</td><td>'+esc((s.sale_items||[]).map(i=>i.quantity+' × '+i.product_name_snapshot).join(', '))+'</td><td>'+rm(sen(s.total))+'</td></tr>').join('')+'</table><h2>Pergerakan stok</h2><table><tr><th>Masa</th><th>Produk</th><th>Perubahan</th><th>Sebab</th></tr>'+moves.map(m=>'<tr><td>'+esc(localTime(m.created_at))+'</td><td>'+esc(m.product?.name||'—')+'</td><td>'+esc(m.quantity_before)+' → '+esc(m.quantity_after)+'</td><td>'+esc(m.reason||m.kind)+'</td></tr>').join('')+'</table></body></html>');
     w.document.close();w.print();
   };
 })();
@@ -3034,5 +3062,4 @@ window.loadDashboard=async function(){const client=window.posClient;if(!client)r
 </body>
 
 </html>
-
 

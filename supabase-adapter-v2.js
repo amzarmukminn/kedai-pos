@@ -19,6 +19,26 @@
     owner: 'Pemilik', admin: 'Admin', manager: 'Pengurus', cashier: 'Juruwang', auditor: 'Juruaudit'
   };
   const showError = error => alert(`Tidak dapat sambung ke pangkalan data: ${error.message || error}`);
+  const updateCachedStats = window.updateStats;
+  let statsRequest = 0;
+  window.updateStats = async function () {
+    updateCachedStats(); // Keeps the low-stock indicator up to date.
+    const request=++statsRequest;
+    const salesEl=document.getElementById('dailySales'), countEl=document.getElementById('dailyCount');
+    salesEl.textContent='…'; countEl.textContent='…';
+    try {
+      const {data,error}=await client.rpc('pos_today_totals');
+      if(error) throw error;
+      if(request!==statsRequest) return;
+      salesEl.textContent='RM '+money(data.net).toFixed(2);
+      countEl.textContent=String(data.count);
+      salesEl.title='Jualan asal hari ini ditolak pembetulan yang dibuat hari ini; bukan jumlah wang yang telah dipulangkan.';
+    } catch(error) {
+      if(request!==statsRequest) return;
+      salesEl.textContent='—'; countEl.textContent='—';
+      salesEl.title='Jumlah hari ini gagal dimuatkan.';
+    }
+  };
 
   function productComparator(left, right) {
     const leftCategory = CATEGORIES.findIndex(category => category.id === left.category);
@@ -167,7 +187,7 @@
       const rows = [];
       if (filter !== 'date' || selected) {
         for (let offset = 0;; offset += 500) {
-          let query = client.from('sales').select('id,receipt_number,completed_at,total,payments(method,amount,cash_received,change_given,status),sale_items(product_id,product_name_snapshot,unit_price,quantity,line_total)').eq('status', 'completed').order('completed_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 499);
+          let query = client.from('sales').select('id,receipt_number,completed_at,total,payments(method,amount,cash_received,change_given,status),sale_items(id,product_id,product_name_snapshot,unit_price,quantity,line_total,is_manual),sale_reversals(id,actor_id,reason,money_status,created_at,sale_reversal_items(sale_item_id,returned_quantity))').eq('status', 'completed').order('completed_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 499);
           if (start) query = query.gte('completed_at', start + 'T00:00:00+08:00').lt('completed_at', new Date(Date.parse(end + 'T00:00:00+08:00') + 86400000).toISOString());
           const { data, error } = await query;
           if (error) throw error;
@@ -179,10 +199,71 @@
       const previous = appState.transactions;
       appState.transactions = rows.map(s => ({ id: s.id, receiptNumber: s.receipt_number, timestamp: s.completed_at, total: money(s.total), paid: money(s.payments?.[0]?.cash_received ?? s.payments?.[0]?.amount), balance: money(s.payments?.[0]?.change_given), paymentMethod: s.payments?.[0]?.method, items: (s.sale_items || []).map(i => ({ productId: i.product_id, name: i.product_name_snapshot, price: money(i.unit_price), quantity: i.quantity, total: money(i.line_total) })) }));
       try { renderCachedHistory(); } finally { appState.transactions = previous; }
+      // Keep original records visible; mark corrections rather than deleting history.
+      [...list.children].forEach((card, index) => {
+        const sale = rows[index];
+        if (!sale) return;
+        const reversal = Array.isArray(sale.sale_reversals) ? sale.sale_reversals[0] : sale.sale_reversals;
+        if (reversal) {
+          const note = document.createElement('p');
+          note.className = 'mt-2 text-xs text-rose-700 font-semibold';
+          const returned=(reversal.sale_reversal_items||[]).map(r=>{const line=(sale.sale_items||[]).find(i=>i.id===r.sale_item_id);return (line?.product_name_snapshot||'Item')+': '+r.returned_quantity;}).join(', ');
+          note.textContent = 'Dibatalkan: ' + reversal.reason + ' · Wang: ' + ({returned:'dipulangkan',not_returned:'tidak dipulangkan',not_applicable:'tidak berkaitan'}[reversal.money_status] || reversal.money_status) + ' · ' + new Date(reversal.created_at).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'}) + ' · Pengguna: ' + reversal.actor_id + (returned ? ' · Stok dipulangkan: '+returned : '');
+          card.append(note);
+        } else if (profile && ['owner','admin'].includes(profile.role)) {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = 'mt-2 px-3 py-1.5 rounded border border-rose-300 text-rose-700 text-xs hover:bg-rose-50';
+          button.textContent = 'Betulkan / batalkan jualan';
+          button.addEventListener('click', () => showSaleReversal(sale));
+          card.append(button);
+        }
+      });
     } catch (error) {
       if (request === historyRequest) { list.textContent = 'Sejarah gagal dimuatkan: ' + (error.message || error); document.getElementById('historyTotalCount').textContent = '—'; document.getElementById('historyTotalSales').textContent = '—'; }
     }
   };
+
+  function showSaleReversal(sale) {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'rounded-xl p-0 shadow-2xl w-full max-w-lg max-h-[90vh]';
+    const form = document.createElement('form');
+    form.className = 'p-5 space-y-3 overflow-y-auto';
+    const heading = document.createElement('h2'); heading.className = 'font-bold text-lg';
+    heading.textContent = 'Betulkan jualan ' + sale.receipt_number;
+    const info = document.createElement('p'); info.className = 'text-sm text-slate-600';
+    info.textContent = 'Rekod asal kekal. Nyatakan kuantiti sebenar yang dipulangkan ke stok. Pembayaran tidak dipulangkan secara automatik.';
+    const reason = document.createElement('textarea'); reason.required = true; reason.minLength = 3; reason.maxLength = 1000;
+    reason.placeholder = 'Sebab pembetulan (wajib)'; reason.setAttribute('aria-label','Sebab pembetulan'); reason.className = 'w-full border rounded p-2';
+    const status = document.createElement('select'); status.required = true; status.className = 'w-full border rounded p-2'; status.setAttribute('aria-label','Status pemulangan wang');
+    [['','Pilih status wang'],['returned','Wang telah dipulangkan'],['not_returned','Wang belum / tidak dipulangkan'],['not_applicable','Tidak berkaitan']].forEach(([value,label]) => { const o = document.createElement('option'); o.value = value; o.textContent = label; status.append(o); });
+    form.append(heading, info, reason, status);
+    const inputs = [];
+    (sale.sale_items || []).filter(item => !item.is_manual && item.product_id).forEach(item => {
+      const label = document.createElement('label'); label.className = 'flex justify-between items-center gap-3 text-sm';
+      const name = document.createElement('span'); name.textContent = item.product_name_snapshot + ' (dijual: ' + item.quantity + ')';
+      const input = document.createElement('input'); input.type = 'number'; input.min = '0'; input.max = String(item.quantity); input.step = '1'; input.value = '0'; input.required = true; input.className = 'w-20 border rounded p-2';
+      label.append(name,input); form.append(label); inputs.push({item,input});
+    });
+    const error = document.createElement('p'); error.className = 'text-sm text-rose-700'; error.setAttribute('role','alert');
+    const controls = document.createElement('div'); controls.className = 'flex justify-end gap-2';
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Tutup'; cancel.className = 'px-4 py-2 border rounded'; cancel.addEventListener('click', () => dialog.close());
+    const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = 'Rekod pembetulan'; submit.className = 'px-4 py-2 rounded bg-rose-700 text-white';
+    controls.append(cancel,submit); form.append(error,controls); dialog.append(form); document.body.append(dialog);
+    dialog.addEventListener('close', () => dialog.remove());
+    form.addEventListener('submit', async event => {
+      event.preventDefault(); error.textContent = '';
+      if (!form.reportValidity() || !confirm('Rekodkan pembetulan ini? Jualan asal kekal dan stok akan diubah mengikut kuantiti yang dipilih.')) return;
+      submit.disabled = true;
+      try {
+        const {error: rpcError} = await client.rpc('reverse_sale', {p_sale_id:sale.id,p_reason:reason.value.trim(),p_money_status:status.value,p_returns:inputs.map(({item,input}) => ({sale_item_id:item.id,quantity:Number(input.value)}))});
+        if (rpcError) throw rpcError;
+        dialog.close();
+        try { await renderRemoteData(); await window.renderHistory(); }
+        catch (refreshError) { alert('Pembetulan telah direkodkan, tetapi paparan gagal dikemas kini. Muat semula halaman.'); }
+      } catch (e) { error.textContent = 'Status pembetulan tidak dapat dipastikan: ' + (e.message || e) + '. Tutup dan semak semula sejarah sebelum cuba lagi.'; submit.disabled = false; }
+    });
+    dialog.showModal();
+  }
 
   async function renderRemoteData() {
     await loadRemoteData();
@@ -208,6 +289,8 @@
       await renderRemoteData();
       updateDate();
       setInterval(updateDate, 60000);
+      setInterval(() => { if (!document.hidden) updateStats(); }, 60000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) updateStats(); });
       document.addEventListener('keydown', handleKeydown);
       document.addEventListener('click', hideContextMenu);
       document.getElementById('searchInput').addEventListener('input', e => { appState.searchQuery = e.target.value.toLowerCase(); renderProducts(); });
@@ -379,10 +462,32 @@
     await renderRemoteData();
   };
 
-  window.exportDatabase = function () {
-    const data = { products: appState.products, transactions: appState.transactions, suppliers: appState.suppliers, stockHistory: appState.stockHistory, exportDate: new Date().toISOString(), version: 'online-export-1.0' };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-    const a = document.createElement('a'); a.href = url; a.download = `pos-online-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url);
+  window.exportDatabase = async function () {
+    // This is an operational export, not a transaction-consistent database backup.
+    async function allRows(table, fields, sortKeys=['id']) {
+      const rows=[];
+      for (let offset=0;;offset+=500) {
+        let query=client.from(table).select(fields);
+        sortKeys.forEach(key=>{ query=query.order(key); });
+        const {data,error}=await query.range(offset,offset+499);
+        if(error) throw error;
+        rows.push(...data);
+        if(data.length<500) return rows;
+      }
+    }
+    try {
+      const [sales,movements,reversals,reversalItems]=await Promise.all([
+        allRows('sales','*,payments(*),sale_items(*)'), allRows('stock_movements','*'),
+        allRows('sale_reversals','*'), allRows('sale_reversal_items','*',['reversal_id','sale_item_id'])
+      ]);
+      const data={products:appState.products,suppliers:appState.suppliers,
+        transactions:sales.map(s=>({id:s.id,receiptNumber:s.receipt_number,timestamp:s.completed_at,total:money(s.total),paid:money(s.payments?.[0]?.cash_received??s.payments?.[0]?.amount),balance:money(s.payments?.[0]?.change_given),paymentMethod:s.payments?.[0]?.method,items:(s.sale_items||[]).map(i=>({productId:i.product_id,name:i.product_name_snapshot,price:money(i.unit_price),quantity:i.quantity,total:money(i.line_total)}))})),
+        stockHistory:movements, salesRecords:sales, saleReversals:reversals, saleReversalItems:reversalItems,
+        exportDate:new Date().toISOString(),version:'online-export-2.0',
+        notice:'Operational export, not a transaction-consistent database backup. Import only adds supported product data; it does not restore sales, reversals, users or audit history.'};
+      const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+      const a=document.createElement('a'); a.href=url; a.download=`pos-online-export-${new Date().toISOString().slice(0,10)}.json`; a.click(); setTimeout(()=>URL.revokeObjectURL(url),60000);
+    } catch(error) { alert('Eksport gagal: '+(error.message||error)); }
   };
 
   window.handleImport = function (event) {
@@ -400,5 +505,4 @@
     reader.readAsText(file);
   };
 })();
-
 
